@@ -275,7 +275,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 200, y: 200}
+  m_SizeDelta: {x: 800, y: 800}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &145528585
 MonoBehaviour:
@@ -425,9 +425,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26ad74dc32bafd64d8e1e7002b6d51c8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  lightDir: {x: 0, y: 0, z: 0}
   rawImag: {fileID: 145528585}
   mesh: {fileID: -7070831255929112694, guid: 555762d426f9ae940b0c45ca3410b4c5, type: 3}
-  material: {fileID: 0}
+  material: {fileID: 2100000, guid: 5a17f93d29de53140a02e7918ad0b499, type: 2}
 --- !u!1 &796905279
 GameObject:
   m_ObjectHideFlags: 0

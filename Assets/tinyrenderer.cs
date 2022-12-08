@@ -1,37 +1,87 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class tinyrenderer : MonoBehaviour
 {
+    public Vector3 lightDir;
     private Texture2D texture2D = null;
     public RawImage rawImag = null;
     public Mesh mesh = null;
     private int width, height;
     private List<int[]> faces = null;
     public Material material = null;
+    float[] zBuffer = null;
     // Start is called before the first frame update
     void Start()
     {
         width = (int)rawImag.rectTransform.rect.width;
-        height= (int)rawImag.rectTransform.rect.height;
-        texture2D = new Texture2D((int)rawImag.rectTransform.rect.width, (int)rawImag.rectTransform.rect.height, TextureFormat.RGB24,false);
+        height = (int)rawImag.rectTransform.rect.height;
+        texture2D = new Texture2D((int)rawImag.rectTransform.rect.width, (int)rawImag.rectTransform.rect.height, TextureFormat.RGB24, false);
         rawImag.texture = texture2D;
         texture2D.filterMode = FilterMode.Point;
-        //  DrawMesh(mesh);
-        Vector2Int[] t0 = new Vector2Int[]
-        { new Vector2Int(10,70),new Vector2Int(50,160),new Vector2Int(70,80) };
-        Vector2Int[] t1 = new Vector2Int[]
-      { new Vector2Int(180,50),new Vector2Int(150,1),new Vector2Int(70,180) };
-        Vector2Int[] t2  = new Vector2Int[]
-      { new Vector2Int(180,180),new Vector2Int(120,160),new Vector2Int(130,180) };
+        InitBuffer();
+        //  //  DrawMesh(mesh);
+        //  Vector2Int[] t0 = new Vector2Int[]
+        //  { new Vector2Int(10,70),new Vector2Int(50,160),new Vector2Int(70,80) };
+        //  Vector2Int[] t1 = new Vector2Int[]
+        //{ new Vector2Int(180,50),new Vector2Int(150,1),new Vector2Int(70,180) };
+        //  Vector2Int[] t2  = new Vector2Int[]
+        //{ new Vector2Int(180,180),new Vector2Int(120,160),new Vector2Int(130,180) };
 
-        DrawTriangles(t0[0], t0[1], t0[2],Color.red,texture2D);
-        DrawTriangles(t1[0], t1[1], t1[2], Color.green, texture2D);
-        DrawTriangles(t2[0], t2[1], t2[2], Color.red, texture2D);
+        //  //DrawTriangles(t0[0], t0[1], t0[2],Color.red,texture2D);
+        //  //DrawTriangles(t1[0], t1[1], t1[2], Color.green, texture2D);
+        //  //DrawTriangles(t2[0], t2[1], t2[2], Color.red, texture2D);
+
+        //  //  DrawTriangles(t0,Color.white,texture2D);
+          lightDir = new Vector3(0f, 0f, -1f);
+        DrawMesh(mesh, lightDir);
+     
+       // Test();
     }
+    void InitBuffer()
+    {
+        zBuffer = new float[width * height];
+        for(int i=0;i<zBuffer.Length;i++)
+        {
+            zBuffer[i] = float.MinValue;
+        }
+    }
+     void Test()
+    {
+        int[] yBuffer = new int[width];
+        for(int i=0;i< width; i++)
+        {
+            yBuffer[i] = int.MinValue;
 
+        }
+        Rasterize(new Vector2Int(20,34),new Vector2Int(744,400),texture2D, Color.red, yBuffer);
+        Rasterize(new Vector2Int(120, 434), new Vector2Int(444, 400), texture2D, Color.green, yBuffer);
+        Rasterize(new Vector2Int(330, 463), new Vector2Int(594, 200), texture2D, Color.blue, yBuffer);
+    }
+    void Rasterize(Vector2Int P0,Vector2Int P1,Texture2D tex, Color color ,int[] yBuffer)
+    {
+        if(P0.x>P1.x)
+        {
+           
+            Swap(ref P0,ref P1);
+        }
+        for(int x=P0.x;x<P1.x;x++)
+        {
+            float t = (float)(x - P0.x) / (P1.x - P0.x);
+            int y = (int)((P0.y * (1 - t)) + (P1.y * t));
+            if (yBuffer[x]<y)
+            {
+                yBuffer[x] = y;
+                tex.SetPixel(x, 0, color);
+            }
+            
+        }
+        tex.Apply();
+    //    material.SetTexture("_MainTex", tex);
+    }
     void Bresenham01(Vector2Int startPoint, Vector2Int endPoint,Color color,Texture2D tex)
     {
         for(float t=0;t<1;t+=0.01f)
@@ -92,35 +142,113 @@ public class tinyrenderer : MonoBehaviour
        
      
     }
-    void DrawTriangles(Vector2Int v0,Vector2Int v1,Vector2Int v2,Color color,Texture2D texture2D)
+   
+    void DrawTriangles(Vector3[] vertexs, Color color, Texture2D texture2D)
     {
-
-        if (v0.y > v1.y) { Swap<Vector2Int>(ref v0,ref v1); }
-        if (v0.y > v2.y) { Swap<Vector2Int>(ref v0, ref v2); }
-        if (v1.y > v2.y) { Swap<Vector2Int>(ref v1, ref v2); }
-        int totalHeight = v2.y - v0.y;
-        int segment_height = v1.y - v0.y + 1;
-        for(int y=v0.y;y<v1.y;y++)
+        Vector3 minBox=new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+        Vector3 maxBox = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+        for(int i=0;i< vertexs.Length;i++)
         {
-            float alpha = (float)(y - v0.y) / totalHeight;
-            float beta = (float)(y - v0.y) / segment_height;
-             Vector2Int t0= (v2 - v0);
-            Vector2Int t1 = (v1 - v0);
-            Vector2Int A = v0 + new Vector2Int((int)(t0.x * alpha), (int)(t0.y * alpha));
-            Vector2Int B = v0 + new Vector2Int((int)(t1.x * beta), (int)(t1.y * beta));
-         
-            if (A.x > B.x) Swap(ref A,ref  B);
-            for(int x=A.x;x<B.x;x++)
+            if (minBox.x > vertexs[i].x)
             {
-                texture2D.SetPixel(x, y, Color.white);
-             
-
+                minBox.x = vertexs[i].x;
             }
+            if (minBox.y > vertexs[i].y)
+            {
+                minBox.y = vertexs[i].y;
+            }
+            if (maxBox.x <vertexs[i].x)
+            {
+                maxBox.x = vertexs[i].x;
+            }
+            if (maxBox.y < vertexs[i].y)
+            {
+                maxBox.y = vertexs[i].y;
+            }
+        }
+     
+   
+          for(float x =minBox.x;x<maxBox.x;x++)
+            {
+                for (float y = minBox.y; y < maxBox.y; y++)
+                {
+                    Vector3 P = new Vector3(x, y,0);
+               Vector3 bc_screen  = Barycentric(P, vertexs[0], vertexs[1], vertexs[2]);
+                if (bc_screen.x < 0 || bc_screen.y < 0 || bc_screen.z < 0)
+                    continue;
+                P.z = 0;
+                P.z += vertexs[0].z * bc_screen.x;
+                P.z += vertexs[1].z * bc_screen.y;
+                P.z += vertexs[2].z * bc_screen.z;
+                 int zIndex= ((int)P.x + ((int)P.y * width));
 
+                if (zIndex == 640399)
+                {
+                    Debug.Log(zIndex);
+                }
+                if (zBuffer[zIndex] < P.z)
+                {
+                    zBuffer[zIndex] = P.z;
+                    texture2D.SetPixel((int)P.x, (int)P.y, color);
+                }
+            }
         }
         texture2D.Apply();
     }
-    void DrawMesh(Mesh mesh)
+    Vector3 Barycentric(Vector3 P, Vector3 P0, Vector3 P1, Vector3 P2)
+    {
+
+        Vector3 u = Vector3.Cross(new Vector3(P2.x - P0.x, P1.x - P0.x, P0.x - P.x),
+            new Vector3(P2.y - P0.y, P1.y - P0.y, P0.y - P.y));
+        if (Mathf.Abs(u.z) > 1e-2)
+            return new Vector3(1.0f - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
+
+        return new Vector3(-1, -1, -1);
+
+
+     }
+    //    Vector3 Barycentric(Vector3 P, Vector3 P0, Vector3 P1, Vector3 P2)
+    //{
+    //    Vector2Int p = new Vector2Int((int)P.x, (int)P.y);
+    //    Vector2Int p0 = new Vector2Int((int)P0.x, (int)P0.y);
+    //    Vector2Int p1 = new Vector2Int((int)P1.x, (int)P1.y);
+    //    Vector2Int p2 = new Vector2Int((int)P2.x, (int)P2.y);
+    //    Vector3 u = Vector3.Cross(new Vector3(p2.x - p0.x, p1.x - p0.x, p0.x - p.x),
+    //        new Vector3(p2.y - p0.y, p1.y - p0.y, p0.y - p.y));
+    //    if (Mathf.Abs(u.z) < 1)
+    //        return new Vector3(-1, -1, -1);
+
+    //    return new Vector3(1.0f - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
+    //}
+    //void DrawTriangles(Vector2Int v0,Vector2Int v1,Vector2Int v2,Color color,Texture2D texture2D)
+    //{
+
+    //    if (v0.y > v1.y) { Swap<Vector2Int>(ref v0,ref v1); }
+    //    if (v0.y > v2.y) { Swap<Vector2Int>(ref v0, ref v2); }
+    //    if (v1.y > v2.y) { Swap<Vector2Int>(ref v1, ref v2); }
+    //    int totalHeight = v2.y - v0.y;
+    //    int segment_height = v1.y - v0.y + 1;
+    //    for(int y=v0.y;y<v1.y;y++)
+    //    {
+    //        float alpha = (float)(y - v0.y) / totalHeight;
+    //        float beta = (float)(y - v0.y) / segment_height;
+    //         Vector2Int t0= (v2 - v0);
+    //        Vector2Int t1 = (v1 - v0);
+    //        Vector2Int A = v0 + new Vector2Int((int)(t0.x * alpha), (int)(t0.y * alpha));
+    //        Vector2Int B = v0 + new Vector2Int((int)(t1.x * beta), (int)(t1.y * beta));
+
+    //        if (A.x > B.x) Swap(ref A,ref  B);
+    //        for(int x=A.x;x<B.x;x++)
+    //        {
+    //            texture2D.SetPixel(x, y, Color.white);
+
+
+    //        }
+
+    //    }
+    //    texture2D.Apply();
+    //}
+    void DrawMesh(Mesh mesh,Vector3 lightDir)
     {
         int[] triangles = mesh.triangles;
      
@@ -134,25 +262,30 @@ public class tinyrenderer : MonoBehaviour
             int index2 = triangles[i * 3 +  2];
             faces.Add(new int[] { index0, index1, index2 });
         }
-        for(int i=0;i< faceLen; i++)
+        Vector3[] vers=  new Vector3[3];
+        for (int i=0;i< faceLen; i++)
         {
             int []face= faces[i];
-            for (int j=0;j<3;j++)
-            {
-                int index0 = face[j];
-                int index1 = face[(j+1)%3];
-                Vector3 v0 = vertices[index0];
-                Vector3 v1= vertices[index1];
-                int x0 = (int)((v0.x + 1.0f) * width / 2.0f);
-                int y0 = (int)((v0.y + 1.0f) * height / 2.0f);
-                int x1 = (int)((v1.x + 1.0f) * width / 2.0f);
-                int y1 = (int)((v1.y + 1.0f) * height / 2.0f);
-                Debug.Log(v0);
-                DrawLine(x0,y0,x1,y1,Color.white,texture2D);
-            }
+            vers[0]=  new Vector3( (int)((vertices[face[0]].x+1)*width/2.0f+0.5f), (int)((vertices[face[0]].y + 1) * height / 2.0f + 0.5f), vertices[face[0]].z);
+            vers[1] = new Vector3((int)((vertices[face[1]].x + 1) * width / 2.0f + 0.5f), (int)((vertices[face[1]].y + 1) * height / 2.0f+0.5f ), vertices[face[1]].z );
+            vers[2] = new Vector3((int)((vertices[face[2]].x + 1) * width / 2.0f + 0.5f), (int)((vertices[face[2]].y + 1) * height / 2.0f + 0.5f), vertices[face[2]].z);
+           (bool isfront, Color color)= CalculationLightColor(vertices[face[0]], vertices[face[1]], vertices[face[2]], lightDir);
+            if(isfront)
+            DrawTriangles(vers, color, texture2D);
+        
         }
         texture2D.Apply();
-        //material.SetTexture("Texture",texture2D);
+        
+    }
+    (bool,Color) CalculationLightColor(Vector3 P0,Vector3 P1, Vector3 P2 ,Vector3 lightDir)
+    {
+        Vector3 N= Vector3.Cross( (P2 - P0), (P1 - P0));
+        float c = Vector3.Dot(N.normalized, lightDir);
+         if (c < 0)
+            return (false,default);
+
+    
+        return (true, new Color(c,c,c,1));
     }
     void ApplyTexture(Color[][] colors)
     {
